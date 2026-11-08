@@ -86,3 +86,19 @@ jobs:
             exit 0
           }
           gh release create $tag --title "ButtonIsland $tag" --notes-file notes.md "ButtonIsland.cipx"
+
+      # 插件市场索引（tagPattern 方式）会从仓库根目录找 icon.png，
+      # 但仓库里只能存文本，所以这里把 base64 恢复出来的 icon.png 补提交回 main。
+      - name: Commit icon.png back to main
+        shell: pwsh
+        run: |
+          git config user.name "ButtonIsland Bot"
+          git config user.email "bot@users.noreply.github.com"
+          git add icon.png
+          git diff --cached --quiet
+          if ($LASTEXITCODE -eq 0) {
+            Write-Output "icon.png 已在仓库中，无需提交。"
+            exit 0
+          }
+          git commit -m "chore: 从 assets/icon.png.b64 恢复 icon.png"
+          git push
