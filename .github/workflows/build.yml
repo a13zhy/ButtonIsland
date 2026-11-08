@@ -1,0 +1,88 @@
+name: Build & Release
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Restore icon from base64
+        shell: pwsh
+        run: |
+          $b64 = Get-Content -Raw assets/icon.png.b64
+          [IO.File]::WriteAllBytes("icon.png", [Convert]::FromBase64String($b64.Trim()))
+          Get-Item icon.png | Select-Object Name, Length
+
+      - name: Build
+        shell: pwsh
+        run: dotnet build -c Release
+
+      - name: Read version from manifest
+        id: ver
+        shell: pwsh
+        run: |
+          $m = Select-String -Path manifest.yml -Pattern '^version:\s*(.+)$' | Select-Object -First 1
+          $v = $m.Matches.Groups[1].Value.Trim()
+          "version=$v" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+
+      - name: Package cipx
+        shell: pwsh
+        run: |
+          $out = "bin/Release/net8.0-windows"
+          $dist = "dist"
+          New-Item -ItemType Directory -Force $dist | Out-Null
+          Copy-Item "$out/ButtonIsland.dll" $dist -Force
+          Copy-Item "$out/ButtonIsland.deps.json" $dist -Force
+          Copy-Item "manifest.yml" $dist -Force
+          Copy-Item "icon.png" $dist -Force
+          Compress-Archive -Path "$dist/*" -DestinationPath "ButtonIsland.cipx" -Force
+          $zip = [IO.Compression.ZipFile]::OpenRead("ButtonIsland.cipx")
+          $zip.Entries | ForEach-Object { "{0} {1}" -f $_.Name, $_.Length }
+          $zip.Dispose()
+
+      - name: Prepare release notes
+        shell: pwsh
+        run: |
+          $v = "${{ steps.ver.outputs.version }}"
+          $md5 = (Get-FileHash ButtonIsland.cipx -Algorithm MD5).Hash
+          $notes = '## ButtonIsland ' + $v + "`r`n`r`n" + `
+            'ClassIsland 插件：屏幕右下角的按钮悬浮窗。' + "`r`n`r`n" + `
+            '- 按钮可增删改、排序，图标与配色可选' + "`r`n" + `
+            '- 收起成一条细手柄，点手柄拉出面板，鼠标离开自动收回' + "`r`n" + `
+            '- 按钮点击注册为自动化触发器：被点击 / 被再次点击，可选任意按钮' + "`r`n" + `
+            '- 设置页可配悬浮窗行为与全局快捷键' + "`r`n`r`n" + `
+            '安装：把 ButtonIsland.cipx 拖进 ClassIsland 插件页，或解压到 data/Plugins/ButtonIsland' + "`r`n`r`n" + `
+            '<!-- CLASSISLAND_PKG_MD5 {"ButtonIsland.cipx":"' + $md5 + '"} -->'
+          $notes | Out-File -FilePath notes.md -Encoding utf8
+
+      - name: Publish release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $tag = "${{ steps.ver.outputs.version }}"
+          $exists = $false
+          gh release view $tag *> $null
+          if ($LASTEXITCODE -eq 0) { $exists = $true }
+          if ($exists) {
+            Write-Output "release $tag 已存在，本次不重复发布。"
+            exit 0
+          }
+          gh release create $tag --title "ButtonIsland $tag" --notes-file notes.md "ButtonIsland.cipx"
