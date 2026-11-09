@@ -23,16 +23,24 @@ namespace ButtonIsland.Views;
 /// 收起时窗口真的只有 22px 宽 —— 不做"把窗口推到屏幕外"这种取巧做法。
 /// 面板用固定宽度右对齐放在窗口里，窗口变窄时只露出最右边的 22px 手柄，
 /// 变宽时从左边一点点露出来，所以内容不会在动画过程中被挤压重排。
+///
+/// 尺寸走"小色块"路线：一格 52（磁贴 52 + 间距 6），三列总共 190 宽，
+/// 尽量少挡桌面；按钮靠颜色区分，图标 16、名称 9 号字单行。
 /// </summary>
 public sealed class FloatingWindow : Window
 {
-    private const double TileCell = 94;
-    private const double PanelPadding = 12;
+    private const double TileSize = 52;
+    private const double TileGap = 6;
+    private const double TileCell = TileSize + TileGap;
+
+    // 只有一个按钮时，一格 58 宽塞不下标题、齿轮和状态文字，给个下限。
+    private const double MinPanelWidth = 100;
+    private const double PanelPadding = 8;
     private const double DefaultHandleWidth = 22;
-    private const double HeaderHeight = 32;
-    private const double FooterHeight = 24;
-    private const double EmptyContentHeight = 118;
-    private const double CollapsedHeight = 104;
+    private const double HeaderHeight = 24;
+    private const double FooterHeight = 18;
+    private const double EmptyContentHeight = 64;
+    private const double CollapsedHeight = 76;
     private const double DefaultBottomMargin = 36;
 
     private readonly ButtonStore _store;
@@ -50,8 +58,8 @@ public sealed class FloatingWindow : Window
     private double _scaling = 1;
     private int _rightPx;
     private int _bottomPx;
-    private double _panelWidthDip = 282 + PanelPadding * 2;
-    private double _expandedHeightDip = 360;
+    private double _panelWidthDip = TileCell * 3 + PanelPadding * 2;
+    private double _expandedHeightDip = 200;
     private double _handleWidthDip = DefaultHandleWidth;
     private double _marginDip = DefaultBottomMargin;
     private bool _expanded;
@@ -81,13 +89,13 @@ public sealed class FloatingWindow : Window
         FontFamily = new FontFamily("Microsoft YaHei UI, Microsoft YaHei, Segoe UI");
 
         _status.Text = "点按钮触发自动化";
-        _status.FontSize = 11;
+        _status.FontSize = 10;
         _status.Foreground = Ui.Brush(Ui.TextSecondary);
         _status.VerticalAlignment = VAlign.Center;
         _status.TextTrimming = TextTrimming.CharacterEllipsis;
 
         _chevron.Text = "‹";
-        _chevron.FontSize = 19;
+        _chevron.FontSize = 17;
         _chevron.FontWeight = FontWeight.SemiBold;
         _chevron.Foreground = Ui.Brush("#E6FFFFFF");
         _chevron.HorizontalAlignment = HAlign.Center;
@@ -126,8 +134,8 @@ public sealed class FloatingWindow : Window
             Width = _panelWidthDip,
             HorizontalAlignment = HAlign.Right,
             Background = Ui.Brush(Ui.Panel),
-            CornerRadius = new CornerRadius(10, 0, 0, 10),
-            Padding = new Thickness(PanelPadding, 10, PanelPadding, 10),
+            CornerRadius = new CornerRadius(9, 0, 0, 9),
+            Padding = new Thickness(PanelPadding, 8, PanelPadding, 8),
             Child = BuildPanelContent()
         };
 
@@ -155,7 +163,7 @@ public sealed class FloatingWindow : Window
         var title = new TextBlock
         {
             Text = "快捷按钮",
-            FontSize = 12,
+            FontSize = 11,
             FontWeight = FontWeight.SemiBold,
             Foreground = Ui.Brush(Ui.TextPrimary),
             VerticalAlignment = VAlign.Center
@@ -164,10 +172,10 @@ public sealed class FloatingWindow : Window
         var gear = new TextBlock
         {
             Text = "⚙",
-            FontSize = 13,
+            FontSize = 12,
             Foreground = Ui.Brush(Ui.Icon),
             VerticalAlignment = VAlign.Center,
-            Margin = new Thickness(6, 0, 10, 0),
+            Margin = new Thickness(6, 0, 8, 0),
             Cursor = new Cursor(StandardCursorType.Hand)
         };
         gear.PointerPressed += (_, e) =>
@@ -181,7 +189,7 @@ public sealed class FloatingWindow : Window
         var fold = new TextBlock
         {
             Text = "›",
-            FontSize = 16,
+            FontSize = 13,
             FontWeight = FontWeight.SemiBold,
             Foreground = Ui.Brush(Ui.TextSecondary),
             VerticalAlignment = VAlign.Center,
@@ -202,7 +210,7 @@ public sealed class FloatingWindow : Window
         Grid.SetColumn(fold, 2);
 
         _tiles.Width = _panelWidthDip - PanelPadding * 2;
-        _tiles.HorizontalAlignment = HAlign.Left;
+        _tiles.HorizontalAlignment = HAlign.Center;
 
         var footer = new Border
         {
@@ -213,7 +221,7 @@ public sealed class FloatingWindow : Window
         return new StackPanel
         {
             Orientation = Orient.Vertical,
-            Spacing = 6,
+            Spacing = 5,
             Children = { header, _tiles, footer }
         };
     }
@@ -252,19 +260,19 @@ public sealed class FloatingWindow : Window
             var rows = count == 0 ? 0 : (int)Math.Ceiling(count / (double)columns);
             var contentHeight = count == 0 ? EmptyContentHeight : rows * TileCell;
 
-            _panelWidthDip = columns * TileCell + PanelPadding * 2;
-            _expandedHeightDip = HeaderHeight + contentHeight + FooterHeight + 20 + 13;
+            _panelWidthDip = Math.Max(columns * TileCell, MinPanelWidth) + PanelPadding * 2;
+            _expandedHeightDip = HeaderHeight + contentHeight + FooterHeight + 16 + 10;
 
             _panel.Width = _panelWidthDip;
-            _tiles.Width = _panelWidthDip - PanelPadding * 2;
+            _tiles.Width = columns * TileCell;
             _root.Width = _panelWidthDip + _handleWidthDip;
 
             _tiles.Children.Clear();
             _tileIndex.Clear();
             _tiles.ColumnDefinitions = new ColumnDefinitions(
-                string.Join(",", Repeat("94", columns)));
+                string.Join(",", Repeat(TileCell.ToString(CultureInfo.InvariantCulture), columns)));
             _tiles.RowDefinitions = new RowDefinitions(
-                string.Join(",", Repeat("94", rows == 0 ? 1 : rows)));
+                string.Join(",", Repeat(TileCell.ToString(CultureInfo.InvariantCulture), rows == 0 ? 1 : rows)));
             _tiles.Height = contentHeight;
 
             if (count == 0)
@@ -303,7 +311,7 @@ public sealed class FloatingWindow : Window
         var hint = new StackPanel
         {
             Orientation = Orient.Vertical,
-            Spacing = 6,
+            Spacing = 3,
             HorizontalAlignment = HAlign.Center,
             VerticalAlignment = VAlign.Center,
             Children =
@@ -311,14 +319,14 @@ public sealed class FloatingWindow : Window
                 new TextBlock
                 {
                     Text = "还没有按钮",
-                    FontSize = 13,
+                    FontSize = 11,
                     Foreground = Ui.Brush(Ui.TextPrimary),
                     HorizontalAlignment = HAlign.Center
                 },
                 new TextBlock
                 {
                     Text = "右键手柄或点 ⚙ 添加",
-                    FontSize = 11,
+                    FontSize = 9,
                     Foreground = Ui.Brush(Ui.TextSecondary),
                     HorizontalAlignment = HAlign.Center
                 }
@@ -342,7 +350,7 @@ public sealed class FloatingWindow : Window
         var icon = new TextBlock
         {
             Text = string.IsNullOrEmpty(item.Icon) ? "★" : item.Icon,
-            FontSize = 24,
+            FontSize = 16,
             FontFamily = new FontFamily("Segoe UI Emoji, Microsoft YaHei UI, Segoe UI"),
             Foreground = Ui.Brush(color),
             HorizontalAlignment = HAlign.Center,
@@ -353,30 +361,30 @@ public sealed class FloatingWindow : Window
         var name = new TextBlock
         {
             Text = item.Name,
-            FontSize = 11,
+            FontSize = 9,
             Foreground = Ui.Brush("#DDFFFFFF"),
             HorizontalAlignment = HAlign.Center,
             TextAlignment = TextAlignment.Center,
-            TextWrapping = TextWrapping.Wrap,
-            MaxLines = 2,
+            TextWrapping = TextWrapping.NoWrap,
+            MaxLines = 1,
             TextTrimming = TextTrimming.CharacterEllipsis,
-            Margin = new Thickness(6, 0, 6, 0)
+            MaxWidth = TileSize - 8
         };
 
         var tile = new Border
         {
-            Width = 84,
-            Height = 84,
-            Margin = new Thickness(5),
-            CornerRadius = new CornerRadius(10),
-            Background = Ui.Brush(Ui.Tint(color, 0x1A)),
-            BorderBrush = Ui.Brush(Ui.Tint(color, 0x42)),
+            Width = TileSize,
+            Height = TileSize,
+            Margin = new Thickness(TileGap / 2),
+            CornerRadius = new CornerRadius(8),
+            Background = Ui.Brush(Ui.Tint(color, 0x2A)),
+            BorderBrush = Ui.Brush(Ui.Tint(color, 0x99)),
             BorderThickness = new Thickness(1),
             Cursor = new Cursor(StandardCursorType.Hand),
             Child = new StackPanel
             {
                 Orientation = Orient.Vertical,
-                Spacing = 4,
+                Spacing = 1,
                 HorizontalAlignment = HAlign.Center,
                 VerticalAlignment = VAlign.Center,
                 Children = { icon, name }
@@ -390,13 +398,13 @@ public sealed class FloatingWindow : Window
 
         tile.PointerEntered += (_, _) =>
         {
-            tile.Background = Ui.Brush(Ui.Tint(color, 0x2C));
-            tile.BorderBrush = Ui.Brush(Ui.Tint(color, 0x77));
+            tile.Background = Ui.Brush(Ui.Tint(color, 0x3D));
+            tile.BorderBrush = Ui.Brush(Ui.Tint(color, 0xD0));
         };
         tile.PointerExited += (_, _) =>
         {
-            tile.Background = Ui.Brush(Ui.Tint(color, 0x1A));
-            tile.BorderBrush = Ui.Brush(Ui.Tint(color, 0x42));
+            tile.Background = Ui.Brush(Ui.Tint(color, 0x2A));
+            tile.BorderBrush = Ui.Brush(Ui.Tint(color, 0x99));
             ApplyTileState(tile, color, item.Id);
         };
         tile.PointerPressed += (_, e) =>
@@ -428,9 +436,22 @@ public sealed class FloatingWindow : Window
             }
 
             var state = _hub.IsOn(item.Id) ? "开" : "关";
-            SetStatus(again
-                ? $"「{item.Name}」再次点击 → {state}"
-                : $"「{item.Name}」已点击 → {state}", true);
+
+            // 点击之后到底有没有"人"接这一下：有工作流引用这个按钮（含「任意按钮」）才算接上了。
+            // 没接上就直接在状态栏说清楚，不然用户点了没反应只会以为是插件坏了。
+            var refs = AutomationInspector.Current?.CountReferences(item.Id) ?? 0;
+            if (refs == 0)
+            {
+                SetStatus($"「{item.Name}」没接自动化 · 去设置页加触发器", false);
+                ButtonStore.Log($"按钮点击：{item.Name}，但没有工作流引用它 —— 自动化不会执行");
+            }
+            else
+            {
+                SetStatus(again
+                    ? $"「{item.Name}」再次点击 → {state}"
+                    : $"「{item.Name}」已点击 → {state}", true);
+            }
+
             StartAutoCollapse();
         }
         catch (Exception ex)
@@ -448,8 +469,8 @@ public sealed class FloatingWindow : Window
     {
         var on = _hub.IsOn(id);
         tile.BorderThickness = new Thickness(on ? 2 : 1);
-        tile.BorderBrush = Ui.Brush(Ui.Tint(color, on ? (byte)0xEE : (byte)0x42));
-        tile.Background = Ui.Brush(Ui.Tint(color, on ? (byte)0x33 : (byte)0x1A));
+        tile.BorderBrush = Ui.Brush(Ui.Tint(color, on ? (byte)0xEE : (byte)0x99));
+        tile.Background = Ui.Brush(Ui.Tint(color, on ? (byte)0x4D : (byte)0x2A));
     }
 
     private void OnHandlePressed(object? sender, PointerPressedEventArgs e)
@@ -596,7 +617,7 @@ public sealed class FloatingWindow : Window
         _status.Foreground = Ui.Brush(ok ? Ui.Success : Ui.Danger);
 
         _statusTimer?.Stop();
-        var timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(6) };
+        var timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(ok ? 5 : 9) };
         timer.Tick += (_, _) =>
         {
             timer.Stop();

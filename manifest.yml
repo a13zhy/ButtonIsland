@@ -2,8 +2,8 @@ id: a13zhy.buttonisland
 entranceAssembly: ButtonIsland.dll
 apiVersion: 2.1.0.0
 name: ButtonIsland
-description: 屏幕右下角的触发按钮悬浮窗，可收纳/拉出，按钮自由增删改，点击即触发 ClassIsland 自动化。
+description: 屏幕右下角的小按钮岛：52×52 的小色块，收起后只剩一条细手柄；按钮自由增删改与排序，点击交给 ClassIsland 自动化触发器处理，没接自动化时会直接提示。
 author: a13zhy
-version: 1.0.0.0
+version: 1.1.0.0
 url: https://github.com/a13zhy/ButtonIsland
 icon: icon.png
